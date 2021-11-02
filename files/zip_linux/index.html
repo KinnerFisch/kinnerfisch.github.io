@@ -1,0 +1,384 @@
+<meta charset="utf-8">
+<title>zip_linux</title>
+<link rel="stylesheet" href="/res/style.css">
+<link rel="stylesheet" href="/res/font.css">
+<style>body{color:#b2b2b2}</style><pre><font face="font"><b><span style='color:#898887;'>#!/usr/bin/env python3</span>
+<span style='color:#ff5500;'>import</span> threading, shutil, struct, json, stat, zlib, time, sys, io, os
+ZIP64_LIMIT = <span style='color:#b08000;'>0x7fffffff</span>
+ZIP_FILECOUNT_LIMIT = <span style='color:#b08000;'>0xffff</span>
+structEndArchive = b<span style='color:#bf0303;'>&quot;&lt;4s4H2LH&quot;</span>
+stringEndArchive = b<span style='color:#bf0303;'>&quot;PK</span><span style='color:#924c9d;'>\5\6</span><span style='color:#bf0303;'>&quot;</span>
+structCentralDir = <span style='color:#bf0303;'>&quot;&lt;4s4B4HL2L5H2L&quot;</span>
+stringCentralDir = b<span style='color:#bf0303;'>&quot;PK</span><span style='color:#924c9d;'>\1\2</span><span style='color:#bf0303;'>&quot;</span>
+structFileHeader = <span style='color:#bf0303;'>&quot;&lt;4s2B4HL2L2H&quot;</span>
+stringFileHeader = b<span style='color:#bf0303;'>&quot;PK</span><span style='color:#924c9d;'>\3\4</span><span style='color:#bf0303;'>&quot;</span>
+structEndArchive64Locator = <span style='color:#bf0303;'>&quot;&lt;4sLQL&quot;</span>
+stringEndArchive64Locator = b<span style='color:#bf0303;'>&quot;PK</span><span style='color:#924c9d;'>\x06\x07</span><span style='color:#bf0303;'>&quot;</span>
+structEndArchive64 = <span style='color:#bf0303;'>&quot;&lt;4sQ2H2L4Q&quot;</span>
+stringEndArchive64 = b<span style='color:#bf0303;'>&quot;PK</span><span style='color:#924c9d;'>\x06\x06</span><span style='color:#bf0303;'>&quot;</span>
+<span style='color:#dede49;'>def</span> _strip_extra(extra, xids):
+	unpack = struct.Struct(<span style='color:#bf0303;'>&quot;&lt;HH&quot;</span>).unpack
+	modified = <span style='color:#b08000;'>0</span>
+	<span style='color:#644a9b;'>buffer</span> = []
+	start = i = <span style='color:#b08000;'>0</span>
+	<span style='color:#ffff54;'>while</span> i + <span style='color:#b08000;'>4</span> &lt;= <span style='color:#644a9b;'>len</span>(extra):
+		xid, xlen = unpack(extra[i : i + <span style='color:#b08000;'>4</span>])
+		j = i + <span style='color:#b08000;'>4</span> + xlen
+		<span style='color:#ffff54;'>if</span> xid <span style='color:#dede49;'>in</span> xids:
+			<span style='color:#ffff54;'>if</span> i != start:
+				<span style='color:#644a9b;'>buffer</span>.append(extra[start : i])
+			start = j
+			modified = <span style='color:#b08000;'>1</span>
+		i = j
+	<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> modified:
+		<span style='color:#ffff54;'>return</span> extra
+	<span style='color:#ffff54;'>return</span> b<span style='color:#bf0303;'>''</span>.join(<span style='color:#644a9b;'>buffer</span>)
+<span style='color:#dede49;'>class</span> ZipInfo (<span style='color:#644a9b;'>object</span>):
+	<span style='color:#dede49;'>def</span> <span style='color:#644a9b;'>__init__</span>(<span style='color:#0057ae;'>self</span>, filename, date_time=(<span style='color:#b08000;'>2007</span>, <span style='color:#b08000;'>11</span>, <span style='color:#b08000;'>2</span>, <span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>0</span>)):
+		<span style='color:#0057ae;'>self</span>.filename = filename
+		<span style='color:#0057ae;'>self</span>.date_time = date_time
+		<span style='color:#0057ae;'>self</span>.comment = b<span style='color:#bf0303;'>&quot;&quot;</span>
+		<span style='color:#0057ae;'>self</span>.extra = b<span style='color:#bf0303;'>&quot;&quot;</span>
+		<span style='color:#0057ae;'>self</span>.reserved = <span style='color:#b08000;'>0</span>
+	<span style='color:#dede49;'>def</span> FileHeader(<span style='color:#0057ae;'>self</span>, zip64 = <span style='color:#0057ae;'>None</span>):
+		dosdate = <span style='color:#b08000;'>0x3762</span>
+		dostime = <span style='color:#b08000;'>0</span>
+		CRC = <span style='color:#0057ae;'>self</span>.CRC
+		compress_size = <span style='color:#0057ae;'>self</span>.compress_size
+		file_size = <span style='color:#0057ae;'>self</span>.file_size
+		extra = <span style='color:#0057ae;'>self</span>.extra
+		<span style='color:#ffff54;'>if</span> zip64 == <span style='color:#0057ae;'>None</span>:
+			zip64 = file_size &gt; ZIP64_LIMIT <span style='color:#dede49;'>or</span> compress_size &gt; ZIP64_LIMIT
+		<span style='color:#ffff54;'>if</span> zip64:
+			fmt = <span style='color:#bf0303;'>&quot;&lt;HHQQ&quot;</span>
+			extra = extra + struct.pack(fmt, <span style='color:#b08000;'>1</span>, struct.calcsize(fmt)-<span style='color:#b08000;'>4</span>, file_size, compress_size)
+		<span style='color:#ffff54;'>if</span> file_size &gt; ZIP64_LIMIT <span style='color:#dede49;'>or</span> compress_size &gt; ZIP64_LIMIT:
+			<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> zip64:
+				<span style='color:#ffff54;'>raise</span> LargeZipFile(<span style='color:#bf0303;'>&quot;文件大小需要ZIP64扩展&quot;</span>)
+			file_size = <span style='color:#b08000;'>0xffffffff</span>
+			compress_size = <span style='color:#b08000;'>0xffffffff</span>
+		filename, flag_bits = <span style='color:#0057ae;'>self</span>._encodeFilenameFlags()
+		header = struct.pack(structFileHeader, stringFileHeader, <span style='color:#b08000;'>7</span>,
+			<span style='color:#0057ae;'>self</span>.reserved, flag_bits, <span style='color:#0057ae;'>self</span>.compress_type,
+			dostime, dosdate, CRC, compress_size,
+			file_size, <span style='color:#644a9b;'>len</span>(filename), <span style='color:#644a9b;'>len</span>(extra))
+		<span style='color:#ffff54;'>return</span> header + filename + extra
+	<span style='color:#dede49;'>def</span> _encodeFilenameFlags(<span style='color:#0057ae;'>self</span>):
+		<span style='color:#ffff54;'>try</span>:
+			<span style='color:#ffff54;'>return</span> <span style='color:#0057ae;'>self</span>.filename.encode(<span style='color:#bf0303;'>&quot;ascii&quot;</span>), <span style='color:#0057ae;'>self</span>.flag_bits
+		<span style='color:#ffff54;'>except</span> <span style='color:#006e28;'>UnicodeEncodeError</span>:
+			<span style='color:#ffff54;'>return</span> <span style='color:#0057ae;'>self</span>.filename.encode(<span style='color:#bf0303;'>&quot;utf-8&quot;</span>), <span style='color:#0057ae;'>self</span>.flag_bits | <span style='color:#b08000;'>0x800</span>
+	<span style='color:#0057ae;'>@classmethod</span>
+	<span style='color:#dede49;'>def</span> from_file(cls, filename, arcname):
+		st = os.stat(filename)
+		isdir = stat.S_ISDIR(st.st_mode)
+		date_time = (<span style='color:#b08000;'>2007</span>, <span style='color:#b08000;'>11</span>, <span style='color:#b08000;'>2</span>, <span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>0</span>)
+		arcname = os.path.normpath(os.path.splitdrive(arcname)[<span style='color:#b08000;'>1</span>])
+		<span style='color:#ffff54;'>while</span> arcname[<span style='color:#b08000;'>0</span>] <span style='color:#dede49;'>in</span> (os.sep, os.altsep):
+			arcname = arcname[<span style='color:#b08000;'>1</span>:]
+		<span style='color:#ffff54;'>if</span> isdir:
+			arcname += <span style='color:#bf0303;'>&quot;/&quot;</span>
+		zinfo = cls(arcname, date_time)
+		<span style='color:#ffff54;'>if</span> isdir:
+			zinfo.file_size = <span style='color:#b08000;'>0</span>
+		<span style='color:#ffff54;'>else</span>:
+			zinfo.file_size = st.st_size
+		<span style='color:#ffff54;'>return</span> zinfo
+	<span style='color:#dede49;'>def</span> is_dir(<span style='color:#0057ae;'>self</span>):
+		<span style='color:#ffff54;'>return</span> <span style='color:#0057ae;'>self</span>.filename[-<span style='color:#b08000;'>1</span>] == <span style='color:#bf0303;'>&quot;/&quot;</span>
+<span style='color:#dede49;'>def</span> _get_compressor(compress_type, compresslevel):
+	<span style='color:#ffff54;'>return</span> zlib.compressobj(compresslevel, zlib.DEFLATED, -<span style='color:#b08000;'>15</span>)
+<span style='color:#dede49;'>class</span> _ZipWriteFile(io.BufferedIOBase):
+	<span style='color:#dede49;'>def</span> <span style='color:#644a9b;'>__init__</span>(<span style='color:#0057ae;'>self</span>, zf, zinfo, zip64):
+		<span style='color:#0057ae;'>self</span>._zinfo = zinfo
+		<span style='color:#0057ae;'>self</span>._zip64 = zip64
+		<span style='color:#0057ae;'>self</span>._zipfile = zf
+		<span style='color:#0057ae;'>self</span>._compressor = _get_compressor(zinfo.compress_type, zinfo._compresslevel)
+		<span style='color:#0057ae;'>self</span>._file_size = <span style='color:#b08000;'>0</span>
+		<span style='color:#0057ae;'>self</span>._compress_size = <span style='color:#b08000;'>0</span>
+		<span style='color:#0057ae;'>self</span>._crc = <span style='color:#b08000;'>0</span>
+	<span style='color:#0057ae;'>@property</span>
+	<span style='color:#dede49;'>def</span> _fileobj(<span style='color:#0057ae;'>self</span>):
+		<span style='color:#ffff54;'>return</span> <span style='color:#0057ae;'>self</span>._zipfile.fp
+	<span style='color:#dede49;'>def</span> write(<span style='color:#0057ae;'>self</span>, data):
+		nbytes = <span style='color:#644a9b;'>len</span>(data)
+		<span style='color:#0057ae;'>self</span>._file_size += nbytes
+		<span style='color:#0057ae;'>self</span>._crc = zlib.crc32(data, <span style='color:#0057ae;'>self</span>._crc)
+		data = <span style='color:#0057ae;'>self</span>._compressor.compress(data)
+		<span style='color:#0057ae;'>self</span>._compress_size += <span style='color:#644a9b;'>len</span>(data)
+		<span style='color:#0057ae;'>self</span>._fileobj.write(data)
+		<span style='color:#ffff54;'>return</span> nbytes
+	<span style='color:#dede49;'>def</span> close(<span style='color:#0057ae;'>self</span>):
+		buf = <span style='color:#0057ae;'>self</span>._compressor.flush()
+		<span style='color:#0057ae;'>self</span>._compress_size += <span style='color:#644a9b;'>len</span>(buf)
+		<span style='color:#0057ae;'>self</span>._fileobj.write(buf)
+		<span style='color:#0057ae;'>self</span>._zinfo.compress_size = <span style='color:#0057ae;'>self</span>._compress_size
+		<span style='color:#0057ae;'>self</span>._zinfo.CRC = <span style='color:#0057ae;'>self</span>._crc
+		<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> <span style='color:#0057ae;'>self</span>._zip64:
+			<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._file_size &gt; ZIP64_LIMIT:
+				<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>RuntimeError</span>(<span style='color:#bf0303;'>&quot;文件大小意外超出ZIP64限制&quot;</span>)
+			<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._compress_size &gt; ZIP64_LIMIT:
+				<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>RuntimeError</span>(<span style='color:#bf0303;'>&quot;压缩大小意外超过ZIP64限制&quot;</span>)
+		<span style='color:#0057ae;'>self</span>._zipfile.start_dir = <span style='color:#0057ae;'>self</span>._fileobj.tell()
+		<span style='color:#0057ae;'>self</span>._fileobj.seek(<span style='color:#0057ae;'>self</span>._zinfo.header_offset)
+		<span style='color:#0057ae;'>self</span>._fileobj.write(<span style='color:#0057ae;'>self</span>._zinfo.FileHeader(<span style='color:#0057ae;'>self</span>._zip64))
+		<span style='color:#0057ae;'>self</span>._zipfile._writing = <span style='color:#0057ae;'>False</span>
+		<span style='color:#0057ae;'>self</span>._zipfile.filelist.append(<span style='color:#0057ae;'>self</span>._zinfo)
+<span style='color:#dede49;'>class</span> ZipFile:
+	<span style='color:#dede49;'>def</span> <span style='color:#644a9b;'>__init__</span>(<span style='color:#0057ae;'>self</span>, <span style='color:#644a9b;'>file</span>, compression, compresslevel, allowZip64=<span style='color:#0057ae;'>True</span>, mode=<span style='color:#bf0303;'>&quot;w&quot;</span>):
+		<span style='color:#0057ae;'>self</span>._allowZip64 = allowZip64
+		<span style='color:#0057ae;'>self</span>.NameToInfo = {}
+		<span style='color:#0057ae;'>self</span>.filelist = []
+		<span style='color:#0057ae;'>self</span>.compression = compression
+		<span style='color:#0057ae;'>self</span>.compresslevel = compresslevel
+		<span style='color:#0057ae;'>self</span>.mode = mode
+		<span style='color:#0057ae;'>self</span>._comment = b<span style='color:#bf0303;'>&quot;&quot;</span>
+		<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>isinstance</span>(<span style='color:#644a9b;'>file</span>, <span style='color:#644a9b;'>str</span>):
+			<span style='color:#0057ae;'>self</span>._filePassed = <span style='color:#b08000;'>0</span>
+			<span style='color:#0057ae;'>self</span>.filename = <span style='color:#644a9b;'>file</span>
+			filemode = <span style='color:#bf0303;'>&quot;w+b&quot;</span>
+			<span style='color:#0057ae;'>self</span>.fp = io.<span style='color:#644a9b;'>open</span>(<span style='color:#644a9b;'>file</span>, filemode)
+		<span style='color:#ffff54;'>else</span>:
+			<span style='color:#0057ae;'>self</span>._filePassed = <span style='color:#b08000;'>1</span>
+			<span style='color:#0057ae;'>self</span>.fp = <span style='color:#644a9b;'>file</span>
+		<span style='color:#0057ae;'>self</span>._fileRefCnt = <span style='color:#b08000;'>1</span>
+		<span style='color:#0057ae;'>self</span>._lock = threading.RLock()
+		<span style='color:#0057ae;'>self</span>._seekable = <span style='color:#0057ae;'>True</span>
+		<span style='color:#0057ae;'>self</span>._writing = <span style='color:#0057ae;'>False</span>
+		<span style='color:#0057ae;'>self</span>.start_dir = <span style='color:#0057ae;'>self</span>.fp.tell()
+	<span style='color:#dede49;'>def</span> <span style='color:#644a9b;'>open</span>(<span style='color:#0057ae;'>self</span>, name, mode, force_zip64=<span style='color:#0057ae;'>False</span>):
+		<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>isinstance</span>(name, ZipInfo):
+			zinfo = name
+		<span style='color:#ffff54;'>elif</span> mode == <span style='color:#bf0303;'>&quot;w&quot;</span>:
+			zinfo = ZipInfo(name)
+			zinfo.compress_type = <span style='color:#0057ae;'>self</span>.compression
+			zinfo._compresslevel = <span style='color:#0057ae;'>self</span>.compresslevel
+		<span style='color:#ffff54;'>return</span> <span style='color:#0057ae;'>self</span>._open_to_write(zinfo, force_zip64=force_zip64)
+		<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._writing:
+			<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>ValueError</span>(<span style='color:#bf0303;'>&quot;当ZIP文件上有打开的写入句柄时, 无法读取该文件. 在尝试读取之前, 请关闭写入手柄.&quot;</span>)
+	<span style='color:#dede49;'>def</span> _open_to_write(<span style='color:#0057ae;'>self</span>, zinfo, force_zip64=<span style='color:#0057ae;'>False</span>):
+		<span style='color:#ffff54;'>if</span> force_zip64 <span style='color:#dede49;'>and</span> <span style='color:#dede49;'>not</span> <span style='color:#0057ae;'>self</span>._allowZip64:
+			<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>ValueError</span>(<span style='color:#bf0303;'>&quot;force_zip64为True, 但allowZip64在打开ZIP文件时为False.&quot;</span>)
+		<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._writing:
+			<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>ValueError</span>(<span style='color:#bf0303;'>&quot;当ZIP文件上有打开的写入句柄时, 无法读取该文件. 在尝试读取之前, 请关闭写入手柄.&quot;</span>)
+		<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> <span style='color:#644a9b;'>hasattr</span>(zinfo, <span style='color:#bf0303;'>&quot;file_size&quot;</span>):
+			zinfo.file_size = <span style='color:#b08000;'>0</span>
+		zinfo.compress_size = <span style='color:#b08000;'>0</span>
+		zinfo.CRC = <span style='color:#b08000;'>0</span>
+		zinfo.flag_bits = <span style='color:#b08000;'>0x00</span>
+		<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> <span style='color:#0057ae;'>self</span>._seekable:
+			zinfo.flag_bits |= <span style='color:#b08000;'>0x08</span>
+		zip64 = <span style='color:#0057ae;'>self</span>._allowZip64 <span style='color:#dede49;'>and</span> (force_zip64 <span style='color:#dede49;'>or</span> zinfo.file_size * <span style='color:#b08000;'>1.05</span> &gt; ZIP64_LIMIT)
+		<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._seekable:
+			<span style='color:#0057ae;'>self</span>.fp.seek(<span style='color:#0057ae;'>self</span>.start_dir)
+		zinfo.header_offset = <span style='color:#0057ae;'>self</span>.fp.tell()
+		<span style='color:#0057ae;'>self</span>._didModify = <span style='color:#0057ae;'>True</span>
+		<span style='color:#0057ae;'>self</span>.fp.write(zinfo.FileHeader(zip64))
+		<span style='color:#0057ae;'>self</span>._writing = <span style='color:#0057ae;'>True</span>
+		<span style='color:#ffff54;'>return</span> _ZipWriteFile(<span style='color:#0057ae;'>self</span>, zinfo, zip64)
+	<span style='color:#dede49;'>def</span> write(<span style='color:#0057ae;'>self</span>, filename, arcname=<span style='color:#0057ae;'>None</span>, compress_type=<span style='color:#0057ae;'>None</span>, compresslevel=<span style='color:#0057ae;'>None</span>):
+		<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> <span style='color:#0057ae;'>self</span>.fp:
+			<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>ValueError</span>(<span style='color:#bf0303;'>&quot;尝试写入已关闭的ZIP存档&quot;</span>)
+		<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._writing:
+			<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>ValueError</span>(<span style='color:#bf0303;'>&quot;存在打开的写入句柄时无法写入ZIP存档&quot;</span>)
+		zinfo = ZipInfo.from_file(filename, arcname)
+		zinfo.compress_type = <span style='color:#0057ae;'>self</span>.compression
+		zinfo._compresslevel = <span style='color:#0057ae;'>self</span>.compresslevel
+		<span style='color:#ffff54;'>with</span> <span style='color:#644a9b;'>open</span>(filename, <span style='color:#bf0303;'>&quot;rb&quot;</span>) <span style='color:#ff5500;'>as</span> src, <span style='color:#0057ae;'>self</span>.<span style='color:#644a9b;'>open</span>(zinfo, <span style='color:#bf0303;'>&quot;w&quot;</span>) <span style='color:#ff5500;'>as</span> dest:
+			shutil.copyfileobj(src, dest, <span style='color:#b08000;'>0x2000</span>)
+	<span style='color:#dede49;'>def</span> <span style='color:#644a9b;'>__del__</span>(<span style='color:#0057ae;'>self</span>):
+		<span style='color:#0057ae;'>self</span>.close()
+	<span style='color:#dede49;'>def</span> close(<span style='color:#0057ae;'>self</span>):
+		<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>.fp == <span style='color:#0057ae;'>None</span>:
+			<span style='color:#ffff54;'>return</span>
+		<span style='color:#ffff54;'>try</span>:
+			<span style='color:#ffff54;'>with</span> <span style='color:#0057ae;'>self</span>._lock:
+				<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>self</span>._seekable:
+					<span style='color:#0057ae;'>self</span>.fp.seek(<span style='color:#0057ae;'>self</span>.start_dir)
+				<span style='color:#0057ae;'>self</span>._write_end_record()
+		<span style='color:#ffff54;'>finally</span>:
+			fp = <span style='color:#0057ae;'>self</span>.fp
+			<span style='color:#0057ae;'>self</span>.fp = <span style='color:#0057ae;'>None</span>
+			<span style='color:#0057ae;'>self</span>._fpclose(fp)
+	<span style='color:#dede49;'>def</span> _write_end_record(<span style='color:#0057ae;'>self</span>):
+		<span style='color:#ffff54;'>for</span> zinfo <span style='color:#dede49;'>in</span> <span style='color:#0057ae;'>self</span>.filelist:
+			dosdate = <span style='color:#b08000;'>0x3762</span>
+			dostime = <span style='color:#b08000;'>0</span>
+			extra = []
+			<span style='color:#ffff54;'>if</span> zinfo.file_size &gt; ZIP64_LIMIT <span style='color:#dede49;'>or</span> zinfo.compress_size &gt; ZIP64_LIMIT:
+				extra.append(zinfo.file_size)
+				extra.append(zinfo.compress_size)
+				file_size = <span style='color:#b08000;'>0xffffffff</span>
+				compress_size = <span style='color:#b08000;'>0xffffffff</span>
+			<span style='color:#ffff54;'>else</span>:
+				file_size = zinfo.file_size
+				compress_size = zinfo.compress_size
+			<span style='color:#ffff54;'>if</span> zinfo.header_offset &gt; ZIP64_LIMIT:
+				extra.append(zinfo.header_offset)
+				header_offset = <span style='color:#b08000;'>0xffffffff</span>
+			<span style='color:#ffff54;'>else</span>:
+				header_offset = zinfo.header_offset
+			extra_data = zinfo.extra
+			<span style='color:#ffff54;'>if</span> extra:
+				extra_data = struct.pack(<span style='color:#bf0303;'>&quot;&lt;HH&quot;</span> + <span style='color:#bf0303;'>&quot;Q&quot;</span> * <span style='color:#644a9b;'>len</span>(extra), <span style='color:#b08000;'>1</span>, <span style='color:#b08000;'>8</span> * <span style='color:#644a9b;'>len</span>(extra), * extra) + _strip_extra(extra_data, (<span style='color:#b08000;'>1</span>))
+			filename, flag_bits = zinfo._encodeFilenameFlags()
+			centdir = struct.pack(structCentralDir, stringCentralDir,
+				<span style='color:#b08000;'>7</span>, <span style='color:#b08000;'>7</span>, <span style='color:#b08000;'>7</span>,
+				zinfo.reserved, flag_bits, zinfo.compress_type,
+				dostime, dosdate, zinfo.CRC,
+				compress_size, file_size, <span style='color:#644a9b;'>len</span>(filename),
+				<span style='color:#644a9b;'>len</span>(extra_data), <span style='color:#644a9b;'>len</span>(zinfo.comment), <span style='color:#b08000;'>0</span>,
+				<span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>0</span>, header_offset)
+			<span style='color:#0057ae;'>self</span>.fp.write(centdir)
+			<span style='color:#0057ae;'>self</span>.fp.write(filename)
+			<span style='color:#0057ae;'>self</span>.fp.write(extra_data)
+			<span style='color:#0057ae;'>self</span>.fp.write(zinfo.comment)
+		pos2 = <span style='color:#0057ae;'>self</span>.fp.tell()
+		centDirCount = <span style='color:#644a9b;'>len</span>(<span style='color:#0057ae;'>self</span>.filelist)
+		centDirSize = pos2 - <span style='color:#0057ae;'>self</span>.start_dir
+		centDirOffset = <span style='color:#644a9b;'>min</span>(<span style='color:#0057ae;'>self</span>.start_dir, <span style='color:#b08000;'>0xffffffff</span>)
+		requires_zip64 = <span style='color:#0057ae;'>None</span>
+		endrec = struct.pack(structEndArchive, stringEndArchive, <span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>0</span>,
+			centDirCount, centDirCount, centDirSize, centDirOffset, <span style='color:#644a9b;'>len</span>(<span style='color:#0057ae;'>self</span>._comment))
+		<span style='color:#0057ae;'>self</span>.fp.write(endrec)
+		<span style='color:#0057ae;'>self</span>.fp.write(<span style='color:#0057ae;'>self</span>._comment)
+		<span style='color:#0057ae;'>self</span>.fp.flush()
+	<span style='color:#dede49;'>def</span> _fpclose(<span style='color:#0057ae;'>self</span>, fp):
+		<span style='color:#ffff54;'>if</span> <span style='color:#dede49;'>not</span> <span style='color:#0057ae;'>self</span>._fileRefCnt <span style='color:#dede49;'>and</span> <span style='color:#dede49;'>not</span> <span style='color:#0057ae;'>self</span>._filePassed:
+			fp.close()
+<span style='color:#dede49;'>def</span> kfzip():
+	<span style='color:#ffff54;'>try</span>:
+		<span style='color:#ff5500;'>from</span> random <span style='color:#ff5500;'>import</span> randint <span style='color:#ff5500;'>as</span> rd
+		<span style='color:#ffff54;'>if</span> <span style='color:#bf0303;'>&quot;--no-print&quot;</span> <span style='color:#dede49;'>in</span> sys.argv:
+			sys.argv.remove(<span style='color:#bf0303;'>&quot;--no-print&quot;</span>)
+			__print__ = <span style='color:#b08000;'>0</span>
+		<span style='color:#ffff54;'>else</span>:
+			__print__ = <span style='color:#b08000;'>1</span>
+		odir = os.getcwd()
+		x = <span style='color:#bf0303;'>&quot;&quot;</span>
+		sl = <span style='color:#b08000;'>0</span>
+		<span style='color:#ffff54;'>try</span>:
+			<span style='color:#644a9b;'>max</span> = <span style='color:#644a9b;'>int</span>(os.get_terminal_size().columns / <span style='color:#b08000;'>2.5</span>)
+		<span style='color:#ffff54;'>except</span>:
+			<span style='color:#644a9b;'>max</span> = <span style='color:#b08000;'>1</span>
+			__print__ = <span style='color:#b08000;'>0</span>
+		<span style='color:#ffff54;'>if</span> __print__:
+			<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31;1m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[33m作者: KinnerFisch</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>
+				<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31;1m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[33m发布日期: 2020/11/02</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>
+				<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31;1m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[33m软件版本: 712 Special Edition 2020</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>
+				<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31;1m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[33m源代码: </span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>https://kinnerfisch.gitee.io/r-xs/files/zip_linux/</span><span style='color:#924c9d;'>\&quot;\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[32m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[31m-</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>)
+		<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>len</span>(sys.argv) &gt; <span style='color:#b08000;'>1</span>:
+			<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>len</span>(sys.argv) &lt; <span style='color:#b08000;'>3</span>:
+				sys.argv.append(sys.argv[<span style='color:#b08000;'>1</span>] + <span style='color:#bf0303;'>&quot;.zip&quot;</span>)
+			<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>len</span>(sys.argv) &gt; <span style='color:#b08000;'>2</span>:
+				sys.argv.pop(<span style='color:#b08000;'>0</span>)
+				cpli = <span style='color:#b08000;'>0</span>
+				<span style='color:#ffff54;'>for</span> i <span style='color:#dede49;'>in</span> sys.argv:
+					<span style='color:#ffff54;'>if</span> <span style='color:#bf0303;'>&quot;--compresslevel=&quot;</span> <span style='color:#dede49;'>in</span> i:
+						<span style='color:#ffff54;'>break</span>
+					cpli += <span style='color:#b08000;'>1</span>
+				<span style='color:#ffff54;'>try</span>:
+					compresslevel = sys.argv[cpli].replace(<span style='color:#bf0303;'>&quot;--compresslevel=&quot;</span>, <span style='color:#bf0303;'>&quot;&quot;</span>)
+					sys.argv.pop(cpli)
+				<span style='color:#ffff54;'>except</span>:
+					compresslevel = <span style='color:#bf0303;'>&quot;9&quot;</span>
+				<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>len</span>(sys.argv) &lt; <span style='color:#b08000;'>3</span>:
+					sys.argv.append(sys.argv[<span style='color:#b08000;'>0</span>] + <span style='color:#bf0303;'>&quot;.zip&quot;</span>)
+				<span style='color:#ffff54;'>if</span> sys.argv[<span style='color:#b08000;'>1</span>].split(<span style='color:#bf0303;'>&quot;/&quot;</span>)[-<span style='color:#b08000;'>1</span>].split(<span style='color:#bf0303;'>&quot;.&quot;</span>)[<span style='color:#b08000;'>0</span>] == <span style='color:#bf0303;'>&quot;&quot;</span>:
+					sys.argv[<span style='color:#b08000;'>1</span>] = sys.argv[<span style='color:#b08000;'>1</span>][::-<span style='color:#b08000;'>1</span>].replace(<span style='color:#bf0303;'>&quot;./&quot;</span>, <span style='color:#bf0303;'>&quot;.&quot;</span>)[::-<span style='color:#b08000;'>1</span>]
+				<span style='color:#ffff54;'>if</span> sys.argv[<span style='color:#b08000;'>1</span>].endswith(<span style='color:#bf0303;'>&quot;/&quot;</span>):
+					sys.argv[<span style='color:#b08000;'>1</span>] = sys.argv[<span style='color:#b08000;'>1</span>][::-<span style='color:#b08000;'>1</span>].replace(<span style='color:#bf0303;'>&quot;/&quot;</span>, <span style='color:#bf0303;'>&quot;&quot;</span>)[::-<span style='color:#b08000;'>1</span>]
+				argv = <span style='color:#bf0303;'>'{&quot;dir&quot;: &quot;</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;, &quot;output&quot;: &quot;</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;, &quot;compresslevel&quot;: &quot;</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;}'</span> % (sys.argv[<span style='color:#b08000;'>0</span>], sys.argv[<span style='color:#b08000;'>1</span>], compresslevel)
+				<span style='color:#ffff54;'>try</span>:
+					argv = json.loads(argv)
+					<span style='color:#ffff54;'>if</span> argv[<span style='color:#bf0303;'>&quot;compresslevel&quot;</span>].isnumeric():
+						argv[<span style='color:#bf0303;'>&quot;compresslevel&quot;</span>] = <span style='color:#644a9b;'>int</span>(argv[<span style='color:#bf0303;'>&quot;compresslevel&quot;</span>])
+					<span style='color:#ffff54;'>else</span>:
+						<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>RuntimeError</span>(<span style='color:#bf0303;'>&quot;cplerr&quot;</span>)
+					<span style='color:#ffff54;'>if</span> argv[<span style='color:#bf0303;'>&quot;compresslevel&quot;</span>] <span style='color:#dede49;'>not</span> <span style='color:#dede49;'>in</span> <span style='color:#644a9b;'>list</span>(<span style='color:#644a9b;'>range</span>(<span style='color:#b08000;'>1</span>, <span style='color:#b08000;'>10</span>)):
+						<span style='color:#ffff54;'>raise</span> <span style='color:#006e28;'>RuntimeError</span>(<span style='color:#bf0303;'>&quot;cplerr&quot;</span>)
+				<span style='color:#ffff54;'>except</span> <span style='color:#006e28;'>Exception</span> <span style='color:#ff5500;'>as</span> ei:
+					<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>str</span>(ei) == <span style='color:#bf0303;'>&quot;cplerr&quot;</span>:
+						warn_info = <span style='color:#bf0303;'>&quot;压缩等级不合法: --compresslevel=</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;</span> % argv[<span style='color:#bf0303;'>&quot;compresslevel&quot;</span>]
+					<span style='color:#ffff54;'>elif</span> <span style='color:#bf0303;'>&quot;Expecting&quot;</span> <span style='color:#dede49;'>in</span> <span style='color:#644a9b;'>str</span>(ei):
+						warn_info =<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\b\b</span><span style='color:#bf0303;'>.&quot;</span>
+					<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;31;4m格式错误: 参数错误: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'> </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4m格式: &lt;dir&gt; [output] [--compresslevel=9] [--no-print]</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4mdir	被压缩的文件夹</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4moutput	导出的ZIP文件, 默认为被压缩的文件夹.zip</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4m--compresslevel=压缩等级	可设置1 - 9, 默认为9</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4m--no-print	不输出压缩进度及报错</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span> % warn_info)
+					<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+				<span style='color:#ffff54;'>if</span> (<span style='color:#bf0303;'>&quot;.&quot;</span> <span style='color:#dede49;'>not</span> <span style='color:#dede49;'>in</span> argv[<span style='color:#bf0303;'>&quot;output&quot;</span>]) <span style='color:#dede49;'>or</span> (<span style='color:#dede49;'>not</span> argv[<span style='color:#bf0303;'>&quot;output&quot;</span>].split(<span style='color:#bf0303;'>&quot;.&quot;</span>)[-<span style='color:#b08000;'>1</span>].replace(<span style='color:#bf0303;'>&quot; &quot;</span>, <span style='color:#bf0303;'>&quot;&quot;</span>)):
+					argv[<span style='color:#bf0303;'>&quot;output&quot;</span>] += <span style='color:#bf0303;'>&quot;.zip&quot;</span>
+					argv[<span style='color:#bf0303;'>&quot;output&quot;</span>] = argv[<span style='color:#bf0303;'>&quot;output&quot;</span>][::-<span style='color:#b08000;'>1</span>].replace(<span style='color:#bf0303;'>&quot;..&quot;</span>, <span style='color:#bf0303;'>&quot;.&quot;</span>, <span style='color:#b08000;'>1</span>)[::-<span style='color:#b08000;'>1</span>]
+				<span style='color:#ffff54;'>try</span>:
+					<span style='color:#644a9b;'>open</span>(argv[<span style='color:#bf0303;'>&quot;output&quot;</span>])
+					os.rename(argv[<span style='color:#bf0303;'>&quot;output&quot;</span>], argv[<span style='color:#bf0303;'>&quot;output&quot;</span>] + <span style='color:#bf0303;'>&quot;.old&quot;</span>)
+					<span style='color:#ffff54;'>if</span> __print__:
+						<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0;40;35m</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>已存在, 为您重命名为</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>.old</span><span style='color:#924c9d;'>\&quot;\33</span><span style='color:#bf0303;'>[0m&quot;</span> % (argv[<span style='color:#bf0303;'>&quot;output&quot;</span>].replace(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>&quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\\\&quot;</span><span style='color:#bf0303;'>&quot;</span>), argv[<span style='color:#bf0303;'>&quot;output&quot;</span>].replace(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>&quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\\\&quot;</span><span style='color:#bf0303;'>&quot;</span>)))
+				<span style='color:#ffff54;'>except</span> <span style='color:#006e28;'>Exception</span> <span style='color:#ff5500;'>as</span> ei:
+					<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>type</span>(ei) == <span style='color:#006e28;'>IsADirectoryError</span>:
+						<span style='color:#ffff54;'>if</span> __print__:
+							<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;31;4m已存在名为</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>的文件夹, 终止操作!</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span> % argv[<span style='color:#bf0303;'>&quot;output&quot;</span>].replace(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>&quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\\\&quot;</span><span style='color:#bf0303;'>&quot;</span>))
+						<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+					<span style='color:#ffff54;'>elif</span> <span style='color:#bf0303;'>&quot;] No such file or directory: &quot;</span> <span style='color:#dede49;'>in</span> <span style='color:#644a9b;'>str</span>(ei):
+						<span style='color:#ffff54;'>pass</span>
+					<span style='color:#ffff54;'>else</span>:
+						<span style='color:#ffff54;'>if</span> __print__:
+							<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;31;4m遇到错误: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;</span> % (<span style='color:#644a9b;'>type</span>(ei).<span style='color:#0057ae;'>__name__</span>, <span style='color:#644a9b;'>str</span>(ei)))
+						<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+				<span style='color:#644a9b;'>zip</span> = ZipFile(argv[<span style='color:#bf0303;'>&quot;output&quot;</span>], <span style='color:#b08000;'>8</span>, argv[<span style='color:#bf0303;'>&quot;compresslevel&quot;</span>])
+				<span style='color:#ffff54;'>try</span>:
+					os.chdir(argv[<span style='color:#bf0303;'>&quot;dir&quot;</span>])
+				<span style='color:#ffff54;'>except</span>:
+					<span style='color:#ffff54;'>if</span> __print__:
+						<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;31;4m无法进入文件夹</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>, 请检查是否存在改文件夹或权限足够.</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span> % argv[<span style='color:#bf0303;'>&quot;dir&quot;</span>])
+					<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+				<span style='color:#ffff54;'>if</span> __print__:
+					<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0;40;35m请稍后, 正在计算文件数...</span><span style='color:#924c9d;'>\n\n\33</span><span style='color:#bf0303;'>[s</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>, end = <span style='color:#bf0303;'>&quot;&quot;</span>)
+					afn = fn = failed = <span style='color:#b08000;'>0</span>
+				<span style='color:#ffff54;'>for</span> dirpath, dirnames, filenames <span style='color:#dede49;'>in</span> os.walk(os.getcwd()):
+					<span style='color:#ffff54;'>if</span> __print__:
+						afn += <span style='color:#644a9b;'>len</span>(filenames)
+						st = time.time()
+				<span style='color:#ffff54;'>for</span> dirpath, dirnames, filenames <span style='color:#dede49;'>in</span> os.walk(os.getcwd()):
+					<span style='color:#ffff54;'>for</span> filename <span style='color:#dede49;'>in</span> filenames:
+						<span style='color:#ffff54;'>if</span> __print__:
+							x += [<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[41m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[42m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[43m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[44m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[45m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[46m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>][rd(<span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>5</span>)] * (<span style='color:#644a9b;'>int</span>(fn / afn / (<span style='color:#b08000;'>1</span> / <span style='color:#644a9b;'>max</span>)) - sl)
+							sl += <span style='color:#644a9b;'>int</span>(fn / afn / (<span style='color:#b08000;'>1</span> / <span style='color:#644a9b;'>max</span>)) - sl
+							rt = <span style='color:#bf0303;'>&quot; &quot;</span> * (<span style='color:#644a9b;'>max</span> - sl) * <span style='color:#b08000;'>2</span> + <span style='color:#bf0303;'>&quot;]&quot;</span>
+							<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[2A</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0;40;35m压缩中 [ </span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0;40;35m</span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;</span> % (x, rt), <span style='color:#644a9b;'>str</span>(<span style='color:#644a9b;'>round</span>(fn / afn * <span style='color:#b08000;'>100</span>, <span style='color:#b08000;'>2</span>)) + <span style='color:#bf0303;'>&quot;%</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[K&quot;</span>
+								<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;35m正在压缩文件: </span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>&quot;</span> + os.path.join(dirpath, filename).replace(os.getcwd() + <span style='color:#bf0303;'>&quot;/&quot;</span>, <span style='color:#bf0303;'>&quot;&quot;</span>) + <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\&quot;\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[K&quot;</span>)
+							<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[u&quot;</span>, end = <span style='color:#bf0303;'>&quot;&quot;</span>)
+							fn += <span style='color:#b08000;'>1</span>
+						<span style='color:#ffff54;'>try</span>:
+							<span style='color:#644a9b;'>zip</span>.write(os.path.join(dirpath, filename), os.path.join(dirpath, filename).replace(os.getcwd(), <span style='color:#bf0303;'>&quot;&quot;</span>))
+						<span style='color:#ffff54;'>except</span> (<span style='color:#006e28;'>Exception</span>, <span style='color:#006e28;'>KeyboardInterrupt</span>) <span style='color:#ff5500;'>as</span> ei:
+							<span style='color:#ffff54;'>if</span> __print__:
+								<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>type</span>(ei) == <span style='color:#006e28;'>KeyboardInterrupt</span>:
+									<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\r\33</span><span style='color:#bf0303;'>[40;31m已跳过压缩: </span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[0m&quot;</span> % os.path.join(dirpath, filename).replace(os.getcwd() + <span style='color:#bf0303;'>&quot;/&quot;</span>, <span style='color:#bf0303;'>&quot;&quot;</span>))
+								<span style='color:#ffff54;'>elif</span> <span style='color:#644a9b;'>type</span>(ei) == <span style='color:#006e28;'>PermissionError</span>:
+									<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\r\33</span><span style='color:#bf0303;'>[40;31m无法压缩文件: 没有权限读取文件: </span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[0m&quot;</span> % os.path.join(dirpath, filename))
+								<span style='color:#ffff54;'>elif</span> <span style='color:#644a9b;'>type</span>(ei) == <span style='color:#006e28;'>FileNotFoundError</span>:
+									<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\r\33</span><span style='color:#bf0303;'>[40;31m无法压缩文件: 没有找到文件: </span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[0m&quot;</span> % os.path.join(dirpath, filename))
+								<span style='color:#ffff54;'>else</span>:
+									<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\r\33</span><span style='color:#bf0303;'>[40;31m无法压缩文件: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>&quot;</span> % (<span style='color:#644a9b;'>type</span>(ei).<span style='color:#0057ae;'>__name__</span>, <span style='color:#644a9b;'>str</span>(ei).replace(<span style='color:#bf0303;'>&quot;[Errno &quot;</span>, <span style='color:#bf0303;'>&quot;[错误 &quot;</span>)) + <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[0m&quot;</span>)
+								<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[s&quot;</span>, end = <span style='color:#bf0303;'>&quot;&quot;</span>)
+								failed += <span style='color:#b08000;'>1</span>
+				os.chdir(odir)
+				<span style='color:#ffff54;'>if</span> __print__:
+					x += [<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[41m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[42m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[43m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[44m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[45m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>, <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[46m </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40m &quot;</span>][rd(<span style='color:#b08000;'>0</span>, <span style='color:#b08000;'>5</span>)] * (<span style='color:#644a9b;'>int</span>(fn / afn / (<span style='color:#b08000;'>1</span> / <span style='color:#644a9b;'>max</span>)) - sl)
+					<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[2A</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;35m压缩中 [ </span><span style='color:#3daee9;'>%s</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;35m]&quot;</span> % x, <span style='color:#bf0303;'>&quot;100.0%</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[K&quot;</span>)
+					<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;35m压缩文件夹 </span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>&quot;</span> + argv[<span style='color:#bf0303;'>&quot;dir&quot;</span>] + <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'> 到 </span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'>&quot;</span> + argv[<span style='color:#bf0303;'>&quot;output&quot;</span>] + <span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\&quot;</span><span style='color:#bf0303;'> 完成! 文件大小为&quot;</span> + <span style='color:#644a9b;'>str</span>(<span style='color:#644a9b;'>round</span>(os.path.getsize(argv[<span style='color:#bf0303;'>&quot;output&quot;</span>]) / <span style='color:#b08000;'>0x100000</span>, <span style='color:#b08000;'>5</span>)) + <span style='color:#bf0303;'>&quot; MB[&quot;</span>
+						+ <span style='color:#644a9b;'>str</span>(<span style='color:#644a9b;'>round</span>(os.path.getsize(argv[<span style='color:#bf0303;'>&quot;output&quot;</span>]) / <span style='color:#b08000;'>0x40000000</span>, <span style='color:#b08000;'>5</span>)) + <span style='color:#bf0303;'>&quot; GB], 压缩用时&quot;</span>
+						+ <span style='color:#644a9b;'>str</span>(<span style='color:#644a9b;'>round</span>(time.time() - st, <span style='color:#b08000;'>3</span>)) + <span style='color:#bf0303;'>&quot; 秒[&quot;</span>
+						+ <span style='color:#644a9b;'>str</span>(<span style='color:#644a9b;'>round</span>((time.time() - st) / <span style='color:#b08000;'>60</span>, <span style='color:#b08000;'>3</span>)) + <span style='color:#bf0303;'>&quot; 分钟], 压缩失败文件数为&quot;</span>
+						+ <span style='color:#644a9b;'>str</span>(failed) + <span style='color:#bf0303;'>&quot;个文件[占总文件数的&quot;</span>
+						+ <span style='color:#644a9b;'>str</span>(<span style='color:#644a9b;'>round</span>(failed / afn * <span style='color:#b08000;'>100</span>, <span style='color:#b08000;'>2</span>)) + <span style='color:#bf0303;'>&quot;%]</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>)
+		<span style='color:#ffff54;'>else</span>:
+			<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;31;4m格式错误: 缺少参数. </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4m格式: &lt;dir&gt; [output] [--compresslevel=9] [--no-print]</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4mdir	被压缩的文件夹</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4moutput	导出的ZIP文件, 默认为被压缩的文件夹.zip</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4m--compresslevel=压缩等级	可设置1 - 9, 默认为9</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m</span><span style='color:#924c9d;'>\n\33</span><span style='color:#bf0303;'>[40;31;4m--no-print	不输出压缩进度及报错</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>)
+			<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+	<span style='color:#ffff54;'>except</span> (<span style='color:#006e28;'>Exception</span>, <span style='color:#006e28;'>KeyboardInterrupt</span>) <span style='color:#ff5500;'>as</span> ei:
+		<span style='color:#ffff54;'>if</span> <span style='color:#644a9b;'>type</span>(ei) == <span style='color:#006e28;'>KeyboardInterrupt</span>:
+			<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\r\33</span><span style='color:#bf0303;'>[40;31;4m程序已退出. </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span>)
+			<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+		<span style='color:#644a9b;'>print</span>(<span style='color:#bf0303;'>&quot;</span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[40;31;4m程序已退出: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>: </span><span style='color:#3daee9;'>%s</span><span style='color:#bf0303;'>. </span><span style='color:#924c9d;'>\33</span><span style='color:#bf0303;'>[0m&quot;</span> % (<span style='color:#644a9b;'>type</span>(ei).<span style='color:#0057ae;'>__name__</span>, <span style='color:#644a9b;'>str</span>(ei)))
+		<span style='color:#ffff54;'>return</span> <span style='color:#b08000;'>7</span>
+<span style='color:#ffff54;'>if</span> <span style='color:#0057ae;'>__name__</span> == <span style='color:#bf0303;'>&quot;__main__&quot;</span>:
+	sys.exit(kfzip())</b></font></pre>
