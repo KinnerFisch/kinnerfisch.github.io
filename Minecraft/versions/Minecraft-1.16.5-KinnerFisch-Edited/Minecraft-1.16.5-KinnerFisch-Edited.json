@@ -1,0 +1,91 @@
+{
+	"arguments": {
+		"game": [
+			"--username",
+			"${auth_player_name}",
+			"--uuid",
+			"${auth_uuid}",
+			"--accessToken",
+			"${auth_access_token}",
+			"--userType",
+			"${user_type}",
+			"--assetsDir",
+			"${assets_root}",
+			{
+				"rules": [
+					{
+						"action": "allow",
+						"features": {
+							"has_custom_resolution": true
+						}
+					}
+				],
+				"value": [
+					"--width",
+					"${resolution_width}",
+					"--height",
+					"${resolution_height}"
+				]
+			}
+		],
+		"jvm": [
+			"-Djava.library.path=${natives_directory}",
+			"-Dlog4j2.formatMsgNoLookups=true",
+			"-cp",
+			"${classpath}"
+		]
+	},
+	"assetIndex": {
+		"id": "pack-mcmeta-6",
+		"sha1": "6014ec8eb363c824a4b6bc65d3e87dd4aa912843",
+		"size": 116,
+		"totalSize": 18588,
+		"url": "https://kinnerfisch.gitee.io/Minecraft/assets/indexes/pack-mcmeta-6.json"
+	},
+	"downloads": {
+		"client": {
+			"sha1": "7ad27f4fde5c7e66772761ead618eabb8ab78cd2",
+			"size": 392461498,
+			"url": "https://github.com/KinnerFisch/mcvc/raw/master/Minecraft-1.16.5-KinnerFisch-Edited.jar"
+		}
+	},
+	"id": "Minecraft-1.16.5-KinnerFisch-Edited",
+	"javaVersion": {
+		"component": "jre-legacy",
+		"majorVersion": 8
+	},
+	"libraries": [
+		{
+			"downloads": {
+				"classifiers": {
+					"natives-linux": {
+						"path": "natives-linux.zip",
+						"sha1": "59485d1d2d4e6d70368a6c3bb7f22625269cdf44",
+						"size": 1282861,
+						"url": "https://kinnerfisch.gitee.io/Minecraft/libraries/natives-linux"
+					},
+					"natives-windows": {
+						"path": "natives-windows.zip",
+						"sha1": "d0974e61060a247c94d5f2ddfd6665d67d508324",
+						"size": 2528148,
+						"url": "https://kinnerfisch.gitee.io/Minecraft/libraries/natives-windows"
+					}
+				}
+			},
+			"natives": {
+				"linux": "natives-linux",
+				"windows": "natives-windows"
+			}
+		},
+		{
+			"name": "cn.kinnerfisch:mclibrary:1.16.5",
+			"url": "https://kinnerfisch.gitee.io/Minecraft/libraries/"
+		}
+	],
+	"mainClass": "cn.kinnerfisch.Minecraft",
+	"minimumLauncherVersion": 21,
+	"releaseTime": "2021-11-02T20:00:00+08:00",
+	"time": "2021-11-02T20:00:00+08:00",
+	"type": "release",
+	"clientVersion": "Minecraft-1.16.5-KinnerFisch-Edited"
+}
