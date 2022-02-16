@@ -9,8 +9,6 @@
 			"${auth_access_token}",
 			"--userType",
 			"${user_type}",
-			"--assetsDir",
-			"${assets_root}",
 			{
 				"rules": [
 					{
@@ -36,16 +34,16 @@
 		]
 	},
 	"assetIndex": {
-		"id": "pack-mcmeta-6",
-		"sha1": "6014ec8eb363c824a4b6bc65d3e87dd4aa912843",
-		"size": 116,
-		"totalSize": 18588,
-		"url": "https://kinnerfisch.gitee.io/Minecraft/assets/indexes/pack-mcmeta-6.json"
+		"id": "kinnerfisch-6",
+		"sha1": "1ee330019e1e03e60a382994dfb219e94d6cbddf",
+		"size": 5620,
+		"totalSize": 260072540,
+		"url": "https://kinnerfisch.gitee.io/Minecraft/assets/indexes/kinnerfisch-6.json"
 	},
 	"downloads": {
 		"client": {
-			"sha1": "7ad27f4fde5c7e66772761ead618eabb8ab78cd2",
-			"size": 392461498,
+			"sha1": "06a3384b84d16c7e119dd3a3fc8da96415e80f1a",
+			"size": 134500470,
 			"url": "https://github.com/KinnerFisch/mcvc/raw/master/Minecraft-1.16.5-KinnerFisch-Edited.jar"
 		}
 	},
@@ -84,8 +82,8 @@
 	],
 	"mainClass": "cn.kinnerfisch.Minecraft",
 	"minimumLauncherVersion": 21,
-	"releaseTime": "2021-11-02T20:00:00+08:00",
-	"time": "2021-11-02T20:00:00+08:00",
+	"releaseTime": "2022-02-16T20:00:00+08:00",
+	"time": "2022-02-16T20:00:00+08:00",
 	"type": "release",
 	"clientVersion": "Minecraft-1.16.5-KinnerFisch-Edited"
 }
