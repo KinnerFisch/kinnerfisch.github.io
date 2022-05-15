@@ -1,4 +1,3 @@
-var icon_tags = "<svg viewBox=\"64 64 896 896\" data-icon=\"tags\" width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\" class=\"\"><path d=\"M483.2 790.3L861.4 412c1.7-1.7 2.5-4 2.3-6.3l-25.5-301.4c-.7-7.8-6.8-13.9-14.6-14.6L522.2 64.3c-2.3-.2-4.7.6-6.3 2.3L137.7 444.8a8.03 8.03 0 0 0 0 11.3l334.2 334.2c3.1 3.2 8.2 3.2 11.3 0zm122.7-533.4c18.7-18.7 49.1-18.7 67.9 0 18.7 18.7 18.7 49.1 0 67.9-18.7 18.7-49.1 18.7-67.9 0-18.7-18.7-18.7-49.1 0-67.9zm283.8 282.9l-39.6-39.5a8.03 8.03 0 0 0-11.3 0l-362 361.3-237.6-237a8.03 8.03 0 0 0-11.3 0l-39.6 39.5a8.03 8.03 0 0 0 0 11.3l243.2 242.8 39.6 39.5c3.1 3.1 8.2 3.1 11.3 0l407.3-406.6c3.1-3.1 3.1-8.2 0-11.3z\"></path></svg>";
 (function(k, Ea) {
 "object" === typeof exports && "undefined" !== typeof module ? Ea(exports) : "function" === typeof define && define.amd ? define(["exports"], Ea) : (k = k || self, Ea(k.THREE = {}))
 })(this, function(k) {
@@ -3335,11 +3334,9 @@ H.info = aa
 }
 function d(a) {
 a.preventDefault();
-console.log("THREE.WebGLRenderer: Context Lost.");
 G = !0
 }
 function e() {
-console.log("THREE.WebGLRenderer: Context Restored.");
 G = !1;
 c()
 }
@@ -18999,7 +18996,6 @@ for (var a = 0; a < we.length; a++) we[a].dispose()
 }
 };
 G.create = function(a, b) {
-console.log("THREE.Curve.create() has been deprecated");
 a.prototype = Object.create(G.prototype);
 a.prototype.constructor = a;
 a.prototype.getPoint = b;
@@ -21885,8 +21881,7 @@ var lantern = new THREE.Mesh(instGeom, mat);
 scene.add(lantern);
 let oUs = [];
 let loader = new THREE.STLLoader();
-loader.load("https://cywarr.github.io/small-shop/fish.stl", objGeom => {
-console.log(objGeom);
+loader.load("/res/fish.stl", objGeom => {
 let baseVector = new THREE.Vector3(40, 0, 0);
 let axis = new THREE.Vector3(0, 1, 0);
 let cPts = [];
@@ -21900,11 +21895,9 @@ new THREE.Vector3().copy(baseVector)
 }
 let curve = new THREE.CatmullRomCurve3(cPts);
 curve.closed = true;
-console.log(curve);
 let numPoints = 511;
 let cPoints = curve.getSpacedPoints(numPoints);
 let cObjects = curve.computeFrenetFrames(numPoints, true);
-console.log(cObjects);
 let pGeom = new THREE.BufferGeometry().setFromPoints(cPoints);
 let pMat = new THREE.LineBasicMaterial({color: "yellow"});
 let pathLine = new THREE.Line(pGeom, pMat);
@@ -21916,7 +21909,6 @@ cObjects.tangents.forEach( v => { data.push(v.x, v.y, v.z);} );
 let dataArray = new Float32Array(data);
 let tex = new THREE.DataTexture(dataArray, numPoints + 1, 4, THREE.RGBFormat, THREE.FloatType);
 tex.magFilter = THREE.NearestFilter;
-console.log(tex);
 objGeom.center();
 objGeom.rotateX(-Math.PI * 0.5);
 objGeom.scale(0.5, 0.5, 0.5);

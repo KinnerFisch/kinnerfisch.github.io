@@ -1,140 +1,153 @@
-<head>
-	<meta charset="utf-8">
-	<title>KinnerFisch的网站</title>
-	<link rel="stylesheet" href="/res/style.css">
-	<link rel="stylesheet" href="/res/font.css">
-	<script src="https://www.kinnerfisch.cn/requests_information.js">
-	</script>
-</head>
-<body>
-	<canvas id="canvas">
-	</canvas>
-	<script src="/res/background.js">
-	</script>
-	<font face="font">
-		<div id="loading" class="active">
-		</div>
-		<aside id="menu">
-			<div class="inner flex-row-vertical">
-				<a class="header-icon waves-effect waves-circle waves-light" id="menu-off">
-					<i class="icon icon-lg icon-close">
-					</i>
-				</a>
-				<div class="scroll-wrap flex-col">
-					<ul class="nav">
-						<li class="waves-block waves-effect active">
-							<a href="/">
-								<i class="icon icon-lg icon-home">
-								</i>主页</a>
-						</li>
-						<li class="waves-block waves-effect">
-							<a href="/files/">
-								<i class="icon icon-lg icon-archives">
-								</i>文件</a>
-						</li>
-						<li class="waves-block waves-effect">
-							<a href="/tags">
-								<i class="icon icon-lg icon-tags">
-								</i>标签</a>
-						</li>
-						<li class="waves-block waves-effect">
-							<a href="/kfzip/">
-								<i class="icon icon-lg icon-kfzip">
-								</i>KFZIP</a>
+<html language="zh_cn">
+	<head>
+		<meta charset="utf-8">
+		<title>KinnerFisch的网站</title>
+		<meta name="description" content="KinnerFisch的网站主页"/>
+		<meta name="keywords" content="KinnerFisch,TIAL_KinnerFisch,小鱼,鱼鸽,小鱼姐姐"/>
+		<meta name="author" content="KinnerFisch"/>
+		<link rel="stylesheet" href="/res/style.css">
+		<link rel="stylesheet" href="/res/font.css">
+		<script src="https://www.kinnerfisch.cn:444/requests_information.js">
+		</script>
+	</head>
+	<body>
+		<script src="/res/bg.js"></script>
+		<font face="font">
+			<div id="loading" class="active">
+			</div>
+			<aside id="menu">
+				<div class="inner flex-row-vertical">
+					<a class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+						<i class="icon icon-lg icon-close">
+						</i>
+					</a>
+					<div class="scroll-wrap flex-col">
+						<ul class="nav">
+							<li class="waves-block waves-effect active">
+								<a href="/">
+									<i class="icon icon-lg icon-home">
+									</i>主页</a>
+							</li>
+							<li class="waves-block waves-effect">
+								<a href="/files/">
+									<i class="icon icon-lg icon-archives">
+									</i>文件</a>
+							</li>
+							<li class="waves-block waves-effect">
+								<a href="/tags">
+									<i class="icon icon-lg icon-tags">
+									</i>标签</a>
+							</li>
+							<li class="waves-block waves-effect">
+								<a href="/kfzip/">
+									<i class="icon icon-lg icon-kfzip">
+									</i>KFZIP</a>
+							</li>
+						</ul>
+						<div title="MySSL 安全签章" id="myssl_seal" onclick="window.open('https://myssl.com/seal/detail?domain=www.kinnerfisch.cn','MySSL安全签章','height=800,width=470,top=0,right=0,toolbar=no,menubar=no,scrollbars=no,resizable=no,location=no,status=no')" style="text-align: center"><img src="https://sealres.myssl.com/seal/img/1x/seal.png?domain=www.kinnerfisch.cn" alt="MySSL 安全签章" style="width: 100px; height: auto; cursor: pointer"></div>
+					</div>
+				</div>
+			</aside>
+			<main id="main">
+				<header class="top-header" id="header">
+					<div class="flex-row">
+						<a href="javascript:;" class="header-icon waves-effect waves-circle waves-light on" id="menu-toggle">
+							<i class="icon icon-lg icon-navicon">
+							</i>
+						</a>
+					</div>
+				</header>
+				<header class="content-header index-header">
+					<div class="container fade-scale">
+						<h1 class="title">KinnerFisch的网站</h1>
+						<h5 class="subtitle">写什么副标题, 真的是:D</h5>
+					</div>
+				</header>
+				<div class="container body-wrap">
+					<ul class="post-list">
+						<li class="post-list-item fade">
+							<article id="post-Hello" class="article-card article-type-post" itemprop="blogPost">
+								<div class="post-meta">
+									<a title="发表日期: 2022-05-13">2022-05-13</a>
+								</div>
+								<h3 class="post-title" itemprop="name">
+									<a class="post-title-link" href="https://tial.kinnerfisch.cn/">TIAL</a>
+								</h3>
+								<div class="post-content" id="post-content" itemprop="postContent">小鱼的MC服务器
+									<br>
+									<a href="https://tial.kinnerfisch.cn/" class="post-more">查看更多......</a>
+								</div>
+								<div class="post-meta">
+									<a title="发表日期: 2022-05-13">2022-05-13</a>
+								</div>
+								<h3 class="post-title" itemprop="name">
+									<a class="post-title-link" href="/about">关于本网站</a>
+								</h3>
+								<div class="post-content" id="post-content" itemprop="postContent">About something
+									<br>
+									<a href="/about" class="post-more">查看更多......</a>
+								</div>
+								<div class="post-meta">
+									<a title="2021-04-17 10:57:32">2021-04-17</a>
+								</div>
+								<h3 class="post-title" itemprop="name">
+									<a class="post-title-link" href="/ysr">YSR库网站</a>
+								</h3>
+								<div class="post-content" id="post-content" itemprop="postContent">YSR-Python By KinnerFisch
+									<br>
+									<a href="/ysr" class="post-more">查看更多......</a>
+								</div>
+							</article>
 						</li>
 					</ul>
 				</div>
+				<footer class="footer">
+					<div class="bottom">
+						<p>
+							<span>
+								<a href="https://www.kinnerfisch.cn/">跳转到本网站的KinnerFisch HTTP Server版</a>
+							</span>
+							<span>
+								<a href="https://kinnerfisch.gitee.io/">跳转到本网站的Gitee Pages版</a>
+							</span>
+							<span>
+								<a href="https://kinnerfisch.github.io/">跳转到本网站的Github Pages版</a>
+							</span>
+						</p>
+						<p>
+							<span>总访问量:
+								<script>document.write(requests_information[0])</script>
+							</span>
+							<span>总访客数:
+								<script>document.write(Object.keys(requests_information[1]).length)</script>
+							</span>
+							<span>您的IP:
+								<script>document.write(requests_information[3])</script>
+							</span>
+							<span>您的访问次数:
+								<script>document.write(requests_information[1][requests_information[3]])</script>
+							</span>
+							<span>更新时间:
+								<script>document.write(requests_information[2])</script>
+							</span>
+							<span>技术支持:
+								<a href="http://hexo.io/" target=blank>Hexo</a>
+							</span>
+							<span>主题:
+								<a href="https://github.com/yscoder/hexo-theme-indigo" target=blank>indigo</a>
+							</span>
+						</p>
+					</div>
+				</footer>
+			</main>
+			<div class="mask" id="mask">
 			</div>
-		</aside>
-		<main id="main">
-			<header class="top-header" id="header">
-				<div class="flex-row">
-					<a href="javascript:;" class="header-icon waves-effect waves-circle waves-light on" id="menu-toggle">
-						<i class="icon icon-lg icon-navicon">
-						</i>
-					</a>
-				</div>
-			</header>
-			<header class="content-header index-header">
-				<div class="container fade-scale">
-					<h1 class="title">KinnerFisch的网站</h1>
-					<h5 class="subtitle">写什么副标题, 真的是:D</h5>
-				</div>
-			</header>
-			<div class="container body-wrap">
-				<ul class="post-list">
-					<li class="post-list-item fade">
-						<article id="post-Hello" class="article-card article-type-post" itemprop="blogPost">
-							<div class="post-meta">
-								<a title="发表日期: 2021-09-30">2021-09-30</a>
-							</div>
-							<h3 class="post-title" itemprop="name">
-								<a class="post-title-link" href="/about">关于本网站</a>
-							</h3>
-							<div class="post-content" id="post-content" itemprop="postContent">About something
-								<br>
-								<a href="/about" class="post-more">查看更多......</a>
-							</div>
-							<div class="post-meta">
-								<a title="2021-04-17 10:57:32">2021-04-17</a>
-							</div>
-							<h3 class="post-title" itemprop="name">
-								<a class="post-title-link" href="/ysr">YSR库网站</a>
-							</h3>
-							<div class="post-content" id="post-content" itemprop="postContent">YSR-Python By KinnerFisch
-								<br>
-								<a href="/ysr" class="post-more">查看更多......</a>
-							</div>
-						</article>
-					</li>
-				</ul>
-			</div>
-			<footer class="footer">
-				<div class="bottom">
-					<p>
-						<span>
-							<a href="https://www.kinnerfisch.cn/">跳转到本网站的KinnerFisch HTTP Server版</a>
-						</span>
-						<span>
-							<a href="https://kinnerfisch.gitee.io/">跳转到本网站的Gitee Pages版</a>
-						</span>
-						<span>
-							<a href="https://kinnerfisch.github.io/">跳转到本网站的Github Pages版</a>
-						</span>
-					</p>
-					<p>
-						<span>总访问量:
-							<script>document.write(requests_information[0])</script>
-						</span>
-						<span>总访客数:
-							<script>document.write(Object.keys(requests_information[1]).length)</script>
-						</span>
-						<span>您的IP:
-							<script>document.write(requests_information[3])</script>
-						</span>
-						<span>您的访问次数:
-							<script>document.write(requests_information[1][requests_information[3]])</script>
-						</span>
-						<span>更新时间:
-							<script>document.write(requests_information[2])</script>
-						</span>
-						<span>技术支持:
-							<a href="http://hexo.io/" target=blank>Hexo</a>
-						</span>
-						<span>主题:
-							<a href="https://github.com/yscoder/hexo-theme-indigo" target=blank>indigo</a>
-						</span>
-					</p>
-				</div>
-			</footer>
-		</main>
-		<div class="mask" id="mask">
-		</div>
-		<a href="javascript:;" id="gotop" class="waves-effect waves-circle waves-light">
-			<span class="icon icon-lg icon-chevron-up">
-			</span>
-		</a>
-		<script src="/res/main.min.js">
-		</script>
-	</font>
-</body>
+			<a href="javascript:;" id="gotop" class="waves-effect waves-circle waves-light">
+				<span class="icon icon-lg icon-chevron-up">
+				</span>
+			</a>
+			<script src="/res/main.js">
+			</script>
+		</font>
+	</body>
+</html>

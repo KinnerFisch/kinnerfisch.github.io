@@ -213,14 +213,14 @@ html,body{
 }
 .waves-button{
 	padding:0.85em 1.1em;
-	border-radius:0.2em
+	border-radius:10px
 }
 .waves-button-input{
 	margin:0;
 	padding:0.85em 1.1em
 }
 .waves-input-wrapper{
-	border-radius:0.2em;
+	border-radius:10px;
 	vertical-align:bottom
 }
 .waves-input-wrapper.waves-button{
@@ -302,7 +302,7 @@ html,body{
 	width:80px;
 	height:80px;
 	border:2px solid #3C4143;
-	border-radius:50%;
+	border-radius:10px;
 	overflow:hidden;
 	box-shadow:0 2px 5px 0 rgba(0,0,0,0.16),0 2px 10px 0 rgba(0,0,0,0.12)
 }
@@ -765,7 +765,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 .article-tag-list-item{
 	display:inline-block;
 	margin:0 8px 8px 0;
-	border-radius:2px
+	border-radius:10px
 }
 .article-tag-list-item:nth-child(n+1){
 	background:#8bc34a
@@ -803,10 +803,10 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	font-weight:500;
 	color:#C7C !important;
 	border:none!important;
-	border-radius:3px
+	border-radius:10px
 }
 .post-more:hover,.post-more:active{
-	background:#b0b0b0
+	background:#333
 }
 #page-nav{
 	margin:30px 0 0;
@@ -822,7 +822,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	margin:0 2px;
 	font-size:14px;
 	color:#727272;
-	border-radius:3px;
+	border-radius:10px;
 	overflow:hidden;
 	-webkit-transition:0.4s ease-in-out;
 	transition:0.4s ease-in-out
@@ -859,8 +859,6 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	z-index:30;
 	width:56px;
 	height:56px;
-	line-height:56px;
-	text-align:center;
 	color:#C0C0C0;
 	background:#4B0082;
 	border-radius:50%;
@@ -875,7 +873,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	box-shadow:0 6px 12px rgba(0,0,0,0.2),0 4px 15px rgba(0,0,0,0.2)
 }
 #gotop.in{
-	opacity:1;
+	opacity:10;
 	-webkit-transform:none;
 	transform:none
 }
@@ -892,11 +890,11 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	display:inline-block;
 	text-align:center;
 	color:rgba(0,0,0,0);
-	border-radius:.2em
+	border-radius:10px
 }
 .share-icons a{
 	display:inline-block;
-	border-radius:.2em;
+	border-radius:10px;
 	color:#3C4143;
 	text-align:center
 }
@@ -926,7 +924,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	width:260px;
 	padding:16px	6px;
 	background:#3C4143;
-	border-radius:3px;
+	border-radius:10px;
 	visibility:hidden;
 	box-shadow:0 2px 5px 0 rgba(0,0,0,0.16),0 2px 10px 0 rgba(0,0,0,0.12);
 	-webkit-transition:0.3s ease-in-out;
@@ -1014,7 +1012,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	height:34px;
 	line-height:34px;
 	font-size:1.33333em;
-	border-radius:50%;
+	border-radius:10px;
 	position:relative;
 	box-shadow:0 2px 5px 0 rgba(0,0,0,0.16),0 2px 10px 0 rgba(0,0,0,0.12);
 	-webkit-transition:0.3s ease-in-out;
@@ -1040,7 +1038,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	white-space:nowrap;
 	line-height:24px;
 	padding:0 5px;
-	border-radius:3px;
+	border-radius:10px;
 	background:rgba(0,0,0,0.8)
 }
 .page-share .share-icons a:after{
@@ -1170,7 +1168,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	min-height:100px;
 	padding:35px;
 	background:#3C4143;
-	border-radius:4px;
+	border-radius:10px;
 	box-shadow:0 10px 30px rgba(0,0,0,0.2)
 }
 .post-card .post-meta{
@@ -1252,7 +1250,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	line-height:28px;
 	color:#727272;
 	background:#f1f3fa;
-	border-radius:14px
+	border-radius:10px
 }
 .post-copyright footer img{
 	position:absolute;
@@ -1260,7 +1258,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	left:0;
 	width:28px;
 	height:28px;
-	border-radius:50%
+	border-radius:10px
 }
 .post-footer{
 	position:relative;
@@ -1425,14 +1423,14 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	font-size:80%;
 	padding:3px 5px;
 	border:1px solid #eee;
-	border-radius:2px;
+	border-radius:10px;
 	word-wrap:break-word
 }
 .post-content pre{
 	margin:24px 0
 }
 .post-content pre code{
-	border-radius:0;
+	border-radius:10px;
 	font-size:inherit;
 	margin:0;
 	padding:0
@@ -1452,7 +1450,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 .post-card{
 	position:relative;
 	margin:-20px -16px 0;
-	border-radius:0;
+	border-radius:10px;
 	padding:16px
 }
 .post-card .post-meta{
@@ -1460,7 +1458,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	padding:20px 12px;
 	background:#3C4143;
 	box-shadow:0 1px 4px 0 rgba(0,0,0,0.16);
-	border-radius:2px
+	border-radius:10px
 }
 .post-card-title{
 	display:none
@@ -1515,7 +1513,7 @@ pre .selector-id,pre .selector-class,pre .keyword,pre .javascript .function{
 	color:#E8E6E3;
 	padding:16px 20px 0;
 	background:#3C4143;
-	border-radius:3px;
+	border-radius:10px;
 	box-shadow:0 1px 2px rgba(151,151,151,0.58)
 }
 .article-card .post-content{
